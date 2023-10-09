@@ -1,16 +1,19 @@
+const express = require("express");
 const axios = require("axios");
 const cheerio = require("cheerio");
 
-const headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36" };
+const app = express();
+const port = 3000;
 
-const baseURL = "https://animes.vision/animes/bleach?page=";
-let pageNumber = 1;
-const allEpisodes = [];
+const headers = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+};
 
-async function fetchPage(pageNumber) {
-  const url = `${baseURL}${pageNumber}`;
+async function fetchEpisodes(baseUrl, pageNumber) {
+  const pageUrl = `${baseUrl}?page=${pageNumber}`;
   try {
-    const response = await axios.get(url, { headers });
+    const response = await axios.get(pageUrl, { headers });
     if (response.status === 200) {
       const html = response.data;
       const $ = cheerio.load(html);
@@ -30,35 +33,46 @@ async function fetchPage(pageNumber) {
       });
 
       if (itemLinks.length === 0) {
-        console.log(`Página ${pageNumber}: vazia`);
-        return true;
+        return { pageNumber, data: [] };
       } else {
-        console.log(`Página ${pageNumber}:`);
-        console.log(itemLinks);
-        allEpisodes.push(...itemLinks);
-        return false;
+        return { pageNumber, data: itemLinks };
       }
     } else {
-      console.error(`${pageNumber}: ${response.status}`);
-      return false;
+      return { pageNumber, error: `Error: ${response.status}` };
     }
   } catch (error) {
-    console.error(`${pageNumber}: ${error}`);
-    return false;
+    return { pageNumber, error: `Error: ${error.message}` };
   }
 }
 
-(async () => {
-  while (true) {
-    const isPageEmpty = await fetchPage(pageNumber);
-    if (isPageEmpty) {
-      console.log("Página vazia.");
-      break;
-    }
-    pageNumber++;
+app.get("/api/episodes", async (req, res) => {
+  const baseUrl = req.query.url;
+  const maxPages = req.query.maxPages || 32;
+
+  if (!baseUrl) {
+    res.status(400).json({ error: "Missing 'url' parameter" });
+    return;
   }
 
-  const jsonEpisodes = JSON.stringify(allEpisodes, null, 2);
-  console.log("JSON:");
-  console.log(jsonEpisodes);
-})();
+  const promises = [];
+  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
+    promises.push(fetchEpisodes(baseUrl, pageNumber));
+  }
+
+  try {
+    const results = await Promise.all(promises);
+    const allEpisodes = results.reduce((acc, result) => {
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      return acc.concat(result.data);
+    }, []);
+    res.json(allEpisodes);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
