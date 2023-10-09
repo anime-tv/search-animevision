@@ -1,8 +1,11 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 
-const baseURL = "https://animes.vision/animes/os-cavaleiros-do-zodiaco-dublado?page=";
-const headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",};
+const baseURL = "https://animes.vision/animes/kenpuu-denki-berserk?page=";
+const headers = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+};
 
 let pageNumber = 1;
 
@@ -15,13 +18,16 @@ async function fetchPage(pageNumber) {
       const $ = cheerio.load(html);
 
       const itemLinks = [];
-
-      $(".item a").each((index, element) => {
+      $(".screen-item-thumbnail").each((index, element) => {
         const href = $(element).attr("href");
+        const title = $(element).siblings(".screen-item-info").find("h3.sii-title").text();
+        const imgSrc = $(element).find("img.sit-img").attr("src");
+      
         if (href && href.includes("episodio")) {
-          itemLinks.push(href);
+          itemLinks.push({ href, title, imgSrc });
         }
       });
+      
 
       if (itemLinks.length === 0) {
         console.log(`Página ${pageNumber}: vazia`);
